@@ -1,6 +1,6 @@
-streamlit==1.24.0
+streamlit>=1.24.0
 langchain-nvidia-ai-endpoints==0.1.2  # Replace with the latest version
-langchain==0.0.0  # Replace with the latest version
+langchain>=0.0.140  # Replace with the latest version
 langchain-community==0.0.0  # Replace with the latest version
 langchain-core==0.0.0  # Replace with the latest version
 python-dotenv==1.0.0  # Replace with the latest version
