@@ -1,5 +1,5 @@
 streamlit==1.30.0
-faiss-cpu==1.6.3  # Use a version compatible with Streamlit Cloud
-langchain==0.1.0  # Change as necessary for compatibility
-unstructured==0.10.0  # Example version for compatibility
-onnxruntime  # Leave out version to use the latest compatible version
+faiss-cpu==1.7.4
+langchain==0.1.20
+unstructured[all-docs]==0.11.2
+langchain-nvidia-ai-endpoints
