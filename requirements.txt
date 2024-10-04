@@ -1,8 +1,7 @@
-streamlit>=1.24.0
-langchain-nvidia-ai-endpoints==0.1.2  # Replace with the latest version
-langchain>=0.0.140  # Replace with the latest version
-langchain-community==0.0.0  # Replace with the latest version
-langchain-core==0.0.0  # Replace with the latest version
-python-dotenv==1.0.0  # Replace with the latest version
-Pillow==9.0.0  # Replace with the latest version
-faiss-cpu==1.7.3  # Replace with the latest version, or use faiss-gpu if applicable
+streamlit==1.25.0
+langchain-core==0.0.15
+langchain-community==0.0.7
+langchain-nvidia-ai-endpoints==0.0.4
+python-dotenv==1.0.0
+Pillow==10.0.0
+faiss-cpu==1.7.4
