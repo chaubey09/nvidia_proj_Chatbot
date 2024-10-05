@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader
@@ -7,17 +6,13 @@ from langchain_community.vectorstores import FAISS
 import pickle
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from dotenv import load_dotenv
 from PIL import Image
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Fetch the NVIDIA API key from the .env file
+# Fetch the NVIDIA API key from st.secrets
 nvidia_api_key = st.secrets["nvidia_api_key"]
 
 if not nvidia_api_key:
-    raise ValueError("NVIDIA API Key not found! Make sure it's set in the .env file.")
+    raise ValueError("NVIDIA API Key not found! Make sure it's set in the secrets.toml file.")
 
 st.set_page_config(layout="wide")
 
