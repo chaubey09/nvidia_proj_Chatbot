@@ -8,6 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from PIL import Image
 import os
+import fitz  # PyMuPDF for PDF parsing
 
 # Fetch the NVIDIA API key from st.secrets
 nvidia_api_key = st.secrets["nvidia_api_key"]
@@ -27,7 +28,7 @@ with st.sidebar:
 
     # Upload files form
     with st.form("my-form", clear_on_submit=True):
-        uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", type=["txt", "pdf"], accept_multiple_files=True)
         submitted = st.form_submit_button("Upload!")
 
     if uploaded_files and submitted:
@@ -68,12 +69,27 @@ if st.button("Clear Chat"):
 llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=1024, api_key=nvidia_api_key)
 document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
 
+# PDF Processing Function
+def extract_text_from_pdf(pdf_file):
+    text = ""
+    pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    for page_num in range(len(pdf_document)):
+        page = pdf_document.load_page(page_num)
+        text += page.get_text()
+    return text
+
 # Vector Database Store
 with st.sidebar:
     use_existing_vector_store = st.radio("Use existing vector store if available", ["Yes", "No"], horizontal=True)
 
 vector_store_path = "vectorstore.pkl"
 raw_documents = DirectoryLoader(DOCS_DIR).load()
+
+# Extract text from PDFs and add to raw_documents
+for uploaded_file in uploaded_files:
+    if uploaded_file.name.endswith(".pdf"):
+        extracted_text = extract_text_from_pdf(uploaded_file)
+        raw_documents.append({"page_content": extracted_text})
 
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
