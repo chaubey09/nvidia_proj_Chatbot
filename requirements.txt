@@ -5,6 +5,6 @@ langchain-nvidia-ai-endpoints
 python-dotenv
 Pillow
 faiss-cpu
-pip install unstructured
-pip install pdfminer.six
-pip install pytesseract
+unstructured
+pdfminer.six
+pytesseract
