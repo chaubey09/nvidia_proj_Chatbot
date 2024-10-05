@@ -8,3 +8,4 @@ faiss-cpu
 unstructured
 pdfminer.six
 pytesseract
+PyMuPDF
