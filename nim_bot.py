@@ -14,7 +14,7 @@ from PIL import Image
 load_dotenv()
 
 # Fetch the NVIDIA API key from the .env file
-nvidia_api_key = os.getenv('NVIDIA_API_KEY')
+nvidia_api_key = st.secrets["nvidia_api_key"]
 
 if not nvidia_api_key:
     raise ValueError("NVIDIA API Key not found! Make sure it's set in the .env file.")
