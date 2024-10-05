@@ -7,6 +7,7 @@ import pickle
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from PIL import Image
+import os
 
 # Fetch the NVIDIA API key from st.secrets
 nvidia_api_key = st.secrets["nvidia_api_key"]
