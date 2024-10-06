@@ -9,4 +9,5 @@ unstructured
 pdfminer.six
 pytesseract
 PyMuPDF
-unstructured[pdf]
+"unstructured[pdf]"
+pip install --upgrade
