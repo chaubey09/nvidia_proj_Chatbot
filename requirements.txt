@@ -9,4 +9,4 @@ unstructured
 pdfminer.six
 pytesseract
 PyMuPDF
-"unstructured[pdf]"
+unstructured[pdf]
