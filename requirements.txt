@@ -1,10 +1,10 @@
 streamlit
-langchain-core==0.3.41
-langchain-community==0.3.9
-langchain-nvidia-ai-endpoints==0.3.9
+langchain-core
+langchain-community
+langchain-nvidia-ai-endpoints
 python-dotenv
-Pillow>=9.0
-faiss-cpu==1.7.4
+Pillow
+faiss-cpu
 unstructured
 pdfminer.six
 pytesseract
