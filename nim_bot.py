@@ -97,27 +97,28 @@ for uploaded_file in uploaded_files:
 
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
+
 if use_existing_vector_store == "Yes" and vector_store_exists:
     with open(vector_store_path, "rb") as f:
         vectorstore = pickle.load(f)
     with st.sidebar:
         st.success("Existing vector store loaded successfully.")
+elif raw_documents:
+    with st.sidebar:
+        with st.spinner("Splitting documents into chunks..."):
+            text_splitter = CharacterTextSplitter(chunk_size=512, chunk_overlap=200)
+            documents = text_splitter.split_documents(raw_documents)
+
+        with st.spinner("Adding document chunks to vector database..."):
+            vectorstore = FAISS.from_documents(documents, document_embedder)
+
+        with st.spinner("Saving vector store"):
+            with open(vector_store_path, "wb") as f:
+                pickle.dump(vectorstore, f)
+        st.success("Vector store created and saved.")
 else:
     with st.sidebar:
-        if raw_documents and use_existing_vector_store == "Yes":
-            with st.spinner("Splitting documents into chunks..."):
-                text_splitter = CharacterTextSplitter(chunk_size=512, chunk_overlap=200)
-                documents = text_splitter.split_documents(raw_documents)
-
-            with st.spinner("Adding document chunks to vector database..."):
-                vectorstore = FAISS.from_documents(documents, document_embedder)
-
-            with st.spinner("Saving vector store"):
-                with open(vector_store_path, "wb") as f:
-                    pickle.dump(vectorstore, f)
-            st.success("Vector store created and saved.")
-        else:
-            st.warning("No documents available to process!", icon="⚠️")
+        st.warning("No documents available to process!", icon="⚠️")
 
 # Chat Interface
 st.subheader(f"Chat with {assistant_name} ({personality} Mode)")
