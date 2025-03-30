@@ -4,11 +4,14 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import FAISS
 import pickle
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from PIL import Image
 import os
 import fitz  # PyMuPDF for PDF parsing
+import logging
+
+# Enable logging for debugging
+logging.basicConfig(level=logging.DEBUG)
 
 # Fetch the NVIDIA API key from st.secrets
 nvidia_api_key = st.secrets["nvidia_api_key"]
@@ -111,18 +114,27 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Corrected prompt template for structured messages
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. If provided with context, use it to inform your responses. If no context is available, use your general knowledge to provide a helpful response.")
+    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. If provided with context, use it to inform your responses. If no context is available, use your general knowledge to provide a helpful response."),
+    ("user", "{input}")
 ])
 
 # Input for user prompt
 user_input = st.text_area("Enter your prompt here:", "", height=100)
+
 if st.button("Send") and user_input.strip():
+    # Append user message to session state
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    response = llm(user_input)
+    # Corrected way to invoke ChatNVIDIA
+    prompt = prompt_template.format_messages(input=user_input)
+    response = llm.invoke(prompt)
+
+    # Append assistant's response to session state
     st.session_state.messages.append({"role": "assistant", "content": response})
     with st.chat_message("assistant"):
         st.markdown(response)
+
