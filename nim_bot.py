@@ -85,11 +85,15 @@ with st.sidebar:
 vector_store_path = "vectorstore.pkl"
 raw_documents = DirectoryLoader(DOCS_DIR).load()
 
-# Extract text from PDFs and add to raw_documents
 for uploaded_file in uploaded_files:
+    st.success(f"File {uploaded_file.name} uploaded successfully!")
+    with open(os.path.join(DOCS_DIR, uploaded_file.name), "wb") as f:
+        f.write(uploaded_file.read())
     if uploaded_file.name.endswith(".pdf"):
         extracted_text = extract_text_from_pdf(uploaded_file)
-        raw_documents.append({"page_content": extracted_text})
+        txt_filename = os.path.join(DOCS_DIR, uploaded_file.name.replace(".pdf", ".txt"))
+        with open(txt_filename, "w") as f:
+            f.write(extracted_text)
 
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
