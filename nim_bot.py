@@ -51,7 +51,7 @@ with st.sidebar:
 
 st.sidebar.subheader("Contact Information")
 profile_pic = Image.open("profile_photo.png")
-st.sidebar.image(profile_pic, width=150, use_column_width=False, caption="Anmol Chaubey", output_format="PNG")
+st.sidebar.image(profile_pic, width=150, use_container_width=False, caption="Anmol Chaubey", output_format="PNG")
 st.sidebar.markdown("""
     **Name:** Anmol Chaubey  
     **Email:** anmolchaubey820@gmail.com  
@@ -114,3 +114,15 @@ for message in st.session_state.messages:
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. If provided with context, use it to inform your responses. If no context is available, use your general knowledge to provide a helpful response.")
 ])
+
+# Input for user prompt
+user_input = st.text_area("Enter your prompt here:", "", height=100)
+if st.button("Send") and user_input.strip():
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    
+    response = llm(user_input)
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    with st.chat_message("assistant"):
+        st.markdown(response)
