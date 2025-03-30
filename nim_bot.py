@@ -22,15 +22,10 @@ with st.sidebar:
     st.subheader("Add to the Knowledge Base")
 
     DOCS_DIR = os.path.abspath("./uploaded_docs")
-    if not os.path.exists(DOCS_DIR):
-        os.makedirs(DOCS_DIR)
+    os.makedirs(DOCS_DIR, exist_ok=True)
 
-    # Upload files form
-    with st.form("my-form", clear_on_submit=True):
-        uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", type=["txt", "pdf"], accept_multiple_files=True)
-        submitted = st.form_submit_button("Upload!")
-
-    if uploaded_files and submitted:
+    uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", type=["txt", "pdf"], accept_multiple_files=True)
+    if uploaded_files:
         for uploaded_file in uploaded_files:
             file_path = os.path.join(DOCS_DIR, uploaded_file.name)
             with open(file_path, "wb") as f:
@@ -88,8 +83,7 @@ vectorstore = None
 if use_existing_vector_store == "Yes" and vector_store_exists:
     with open(vector_store_path, "rb") as f:
         vectorstore = pickle.load(f)
-    with st.sidebar:
-        st.success("Existing vector store loaded successfully.")
+    st.sidebar.success("Existing vector store loaded successfully.")
 elif raw_documents:
     with st.sidebar:
         with st.spinner("Splitting documents into chunks..."):
@@ -104,8 +98,7 @@ elif raw_documents:
                 pickle.dump(vectorstore, f)
         st.success("Vector store created and saved.")
 else:
-    with st.sidebar:
-        st.warning("No documents available to process!", icon="⚠️")
+    st.sidebar.warning("No documents available to process!", icon="⚠️")
 
 # Chat Interface
 st.subheader(f"Chat with {assistant_name} ({personality} Mode)")
