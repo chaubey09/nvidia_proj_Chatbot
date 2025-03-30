@@ -12,7 +12,6 @@ import fitz  # PyMuPDF for PDF parsing
 
 # Fetch the NVIDIA API key from st.secrets
 nvidia_api_key = st.secrets["nvidia_api_key"]
-
 if not nvidia_api_key:
     raise ValueError("NVIDIA API Key not found! Make sure it's set in the secrets.toml file.")
 
@@ -33,9 +32,18 @@ with st.sidebar:
 
     if uploaded_files and submitted:
         for uploaded_file in uploaded_files:
-            st.success(f"File {uploaded_file.name} uploaded successfully!")
-            with open(os.path.join(DOCS_DIR, uploaded_file.name), "wb") as f:
+            file_path = os.path.join(DOCS_DIR, uploaded_file.name)
+            with open(file_path, "wb") as f:
                 f.write(uploaded_file.read())
+            st.success(f"File {uploaded_file.name} uploaded successfully!")
+
+            # If it's a PDF, extract text and save as .txt
+            if uploaded_file.name.endswith(".pdf"):
+                extracted_text = fitz.open(file_path)
+                text = "".join([page.get_text() for page in extracted_text])
+                txt_filename = file_path.replace(".pdf", ".txt")
+                with open(txt_filename, "w") as f:
+                    f.write(text)
 
     # Show preview of uploaded files
     if os.listdir(DOCS_DIR):
@@ -47,17 +55,15 @@ with st.sidebar:
                 st.success(f"Deleted {doc}")
 
 st.sidebar.subheader("Contact Information")
-
 profile_pic = Image.open("profile_photo.png")
 st.sidebar.image(profile_pic, width=150, use_column_width=False, caption="Anmol Chaubey", output_format="PNG")
-
 st.sidebar.markdown("""
     **Name:** Anmol Chaubey  
     **Email:** anmolchaubey820@gmail.com  
     [LinkedIn](https://www.linkedin.com/in/anmol-chaubey-120b42206/)
 """)
 
-assistant_name = "AskAI" 
+assistant_name = "AskAI"
 personality = st.sidebar.radio("Choose Assistant Personality", ["Formal", "Casual", "Humorous"], index=1)
 
 # Clear chat button
@@ -69,31 +75,12 @@ if st.button("Clear Chat"):
 llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=1024, api_key=nvidia_api_key)
 document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
 
-# PDF Processing Function
-def extract_text_from_pdf(pdf_file):
-    text = ""
-    pdf_document = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    for page_num in range(len(pdf_document)):
-        page = pdf_document.load_page(page_num)
-        text += page.get_text()
-    return text
-
 # Vector Database Store
 with st.sidebar:
     use_existing_vector_store = st.radio("Use existing vector store if available", ["Yes", "No"], horizontal=True)
 
 vector_store_path = "vectorstore.pkl"
-raw_documents = DirectoryLoader(DOCS_DIR).load()
-
-for uploaded_file in uploaded_files:
-    st.success(f"File {uploaded_file.name} uploaded successfully!")
-    with open(os.path.join(DOCS_DIR, uploaded_file.name), "wb") as f:
-        f.write(uploaded_file.read())
-    if uploaded_file.name.endswith(".pdf"):
-        extracted_text = extract_text_from_pdf(uploaded_file)
-        txt_filename = os.path.join(DOCS_DIR, uploaded_file.name.replace(".pdf", ".txt"))
-        with open(txt_filename, "w") as f:
-            f.write(extracted_text)
+raw_documents = DirectoryLoader(DOCS_DIR, glob="*.txt").load()  # Load only .txt files
 
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
@@ -132,45 +119,5 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. If provided with context, use it to inform your responses. If no context is available, use your general knowledge to provide a helpful response."),
-    ("human", "{input}")
+    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. If provided with context, use it to inform your responses. If no context is available, use your general knowledge to provide a helpful response.")
 ])
-
-chain = prompt_template | llm | StrOutputParser()
-
-# User input field
-user_input = st.chat_input("Ask something...")
-
-# Handle user input and generate response
-if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-
-        if vectorstore is not None and use_existing_vector_store == "Yes":
-            retriever = vectorstore.as_retriever()
-            docs = retriever.invoke(user_input)
-            context = "\n\n".join([doc.page_content for doc in docs])
-            augmented_user_input = f"Context: {context}\n\nQuestion: {user_input}\n"
-        else:
-            augmented_user_input = f"Question: {user_input}\n"
-
-        # Show typing indicator while response is being generated
-        with st.spinner(f"{assistant_name} is thinking..."):
-            for response in chain.stream({"input": augmented_user_input}):
-                full_response += response
-                message_placeholder.markdown(full_response + "▌")
-
-        message_placeholder.markdown(full_response)
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-    # Add emoji reaction option for user to give feedback
-    st.markdown("#### How was the response?")
-    if st.button("👍"):
-        st.success("Thanks for your feedback!")
-    if st.button("👎"):
-        st.error("Sorry to hear that, we'll strive to improve!")
