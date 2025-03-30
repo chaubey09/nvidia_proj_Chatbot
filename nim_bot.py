@@ -131,7 +131,7 @@ if st.button("Send") and user_input.strip():
     
     # Corrected way to invoke ChatNVIDIA
     prompt = prompt_template.format_messages(input=user_input)
-    response = llm.invoke(prompt)
+    response = llm.invoke(prompt).content  # Extract only the response text
 
     # Append assistant's response to session state
     st.session_state.messages.append({"role": "assistant", "content": response})
