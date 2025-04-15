@@ -113,9 +113,9 @@ for message in st.session_state.messages:
 # Updated prompt template for context-aware responses
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
-               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly."),
-    ("user", "{{input}}"),
-    ("context", "{{context}}")
+               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly.\n"
+               "Context: {{context}}"),
+    ("user", "{{input}}")
 ])
 
 # Input for user prompt
