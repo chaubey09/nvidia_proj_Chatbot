@@ -65,17 +65,18 @@ with st.sidebar:
             st.write(f"📄 {doc}")
             if st.button(f"Delete {doc}"):
                 # Delete the uploaded file
+                # Delete the uploaded file
                 os.remove(os.path.join(DOCS_DIR, doc))
                 st.success(f"Deleted {doc}")
-                
+
                 # Delete the corresponding processed text file (if it exists)
                 txt_filename = os.path.join(TEXT_DIR, doc.replace(".pdf", ".txt"))
                 if os.path.exists(txt_filename):
                     os.remove(txt_filename)
                     st.success(f"Deleted processed text file for {doc}")
-                
+
                 # Rebuild the vector store
-                st.experimental_rerun()
+                st.rerun()
 
 st.sidebar.subheader("Contact Information")
 profile_pic = Image.open("profile_photo.png")
