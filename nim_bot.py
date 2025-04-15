@@ -9,6 +9,7 @@ from PIL import Image
 import os
 import fitz  # PyMuPDF for PDF parsing
 import logging
+import re
 
 # Enable detailed logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -30,6 +31,22 @@ TEXT_DIR = os.path.abspath("./processed_texts")
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(TEXT_DIR, exist_ok=True)
 
+def clean_pdf_text(text):
+    """Clean and structure extracted PDF text"""
+    # Remove excessive whitespace and line breaks
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Restore bullet points and structured formatting
+    text = re.sub(r'(o|)\s*', '\n• ', text)
+    
+    # Fix section headers
+    text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\n\1\n', text)
+    
+    # Fix table-like structures
+    text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)
+    
+    return text
+
 # Sidebar for document upload and contact info
 with st.sidebar:
     st.subheader("Add to the Knowledge Base")
@@ -48,9 +65,11 @@ with st.sidebar:
                     extracted_text = fitz.open(file_path)
                     text = "".join([page.get_text("text") for page in extracted_text if page.get_text("text").strip()])
                     if text.strip():  # Ensure the text is not empty
+                        # Clean the extracted text
+                        cleaned_text = clean_pdf_text(text)
                         txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
                         with open(txt_filename, "w", encoding="utf-8") as f:
-                            f.write(text)
+                            f.write(cleaned_text)
                     else:
                         st.warning(f"No extractable text found in {uploaded_file.name}. Skipping.")
                 except Exception as e:
@@ -164,11 +183,20 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Updated prompt template for context-aware responses
+# Updated prompt template for better document summarization
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
-               "Given the context below, extract and summarize all the main topics concisely. Ensure the summary is clear and well-structured.\n"
-               "Context: {{context}}"),
+    ("system", f"""You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone.
+     
+When asked about document contents, provide a structured summary with these sections:
+1. Document Overview
+2. Key Topics
+3. Important Comparisons (if any)
+4. Use Cases/Examples
+5. Technical Specifications (if relevant)
+
+Format the response with clear headings and bullet points for readability.
+
+Document Context: {{context}}"""),
     ("user", "{{input}}")
 ])
 
@@ -184,18 +212,14 @@ if st.button("Send") and user_input.strip():
     # Retrieve relevant documents if vectorstore exists
     if vectorstore:
         try:
-            relevant_docs = vectorstore.similarity_search(user_input, k=3)
-            context = "\n".join([f"- {doc.page_content.strip()}" for doc in relevant_docs if doc.page_content.strip()])
-            st.write("Retrieved Context:", context)  # Debugging
+            relevant_docs = vectorstore.similarity_search(user_input, k=5)  # Increased to 5 for more context
+            context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
+                                 for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
         except Exception as e:
             st.error(f"Error retrieving context: {e}")
             context = ""
     else:
         context = ""
-    
-    # Inform the user if no context is available
-    if not context.strip():
-        st.info("No relevant documents found in the knowledge base.")
     
     # Format the prompt with context and input
     prompt = prompt_template.format_messages(context=context, input=user_input)
@@ -207,11 +231,15 @@ if st.button("Send") and user_input.strip():
         st.error(f"Error generating response: {e}")
         response = "Sorry, I encountered an error while generating a response."
     
-    # Post-process the response to remove unnecessary clutter
-    def clean_response(response, max_length=500):
-        response = response.strip()
-        response = "\n".join([line.strip() for line in response.split("\n") if line.strip()])
-        return response[:max_length] + "..." if len(response) > max_length else response
+    # Post-process the response to improve formatting
+    def clean_response(response):
+        # Ensure consistent bullet points
+        response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
+        # Remove excessive line breaks
+        response = re.sub(r'\n{3,}', '\n\n', response)
+        # Fix numbered lists
+        response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
+        return response.strip()
 
     cleaned_response = clean_response(response)
     
