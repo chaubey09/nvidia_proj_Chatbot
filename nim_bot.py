@@ -24,12 +24,15 @@ except KeyError:
 
 st.set_page_config(layout="wide")
 
+# Directories for uploaded files and processed text files
+DOCS_DIR = os.path.abspath("./uploaded_docs")
+TEXT_DIR = os.path.abspath("./processed_texts")
+os.makedirs(DOCS_DIR, exist_ok=True)
+os.makedirs(TEXT_DIR, exist_ok=True)
+
 # Sidebar for document upload and contact info
 with st.sidebar:
     st.subheader("Add to the Knowledge Base")
-
-    DOCS_DIR = os.path.abspath("./uploaded_docs")
-    os.makedirs(DOCS_DIR, exist_ok=True)
 
     uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", type=["txt", "pdf"], accept_multiple_files=True)
     if uploaded_files:
@@ -39,13 +42,13 @@ with st.sidebar:
                 f.write(uploaded_file.read())
             st.success(f"File {uploaded_file.name} uploaded successfully!")
 
-            # If it's a PDF, extract text and save as .txt
+            # If it's a PDF, extract text and save as .txt in TEXT_DIR
             if uploaded_file.name.endswith(".pdf"):
                 try:
                     extracted_text = fitz.open(file_path)
                     text = "".join([page.get_text() for page in extracted_text if page.get_text().strip()])
                     if text.strip():  # Ensure the text is not empty
-                        txt_filename = file_path.replace(".pdf", ".txt")
+                        txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
                         with open(txt_filename, "w") as f:
                             f.write(text)
                     else:
@@ -55,13 +58,24 @@ with st.sidebar:
                     logging.error(f"Error processing PDF {uploaded_file.name}: {e}")
 
     # Show preview of uploaded files
-    if os.listdir(DOCS_DIR):
+    uploaded_files_list = os.listdir(DOCS_DIR)
+    if uploaded_files_list:
         st.subheader("Current Documents")
-        for doc in os.listdir(DOCS_DIR):
+        for doc in uploaded_files_list:
             st.write(f"📄 {doc}")
             if st.button(f"Delete {doc}"):
+                # Delete the uploaded file
                 os.remove(os.path.join(DOCS_DIR, doc))
                 st.success(f"Deleted {doc}")
+                
+                # Delete the corresponding processed text file (if it exists)
+                txt_filename = os.path.join(TEXT_DIR, doc.replace(".pdf", ".txt"))
+                if os.path.exists(txt_filename):
+                    os.remove(txt_filename)
+                    st.success(f"Deleted processed text file for {doc}")
+                
+                # Rebuild the vector store
+                st.experimental_rerun()
 
 st.sidebar.subheader("Contact Information")
 profile_pic = Image.open("profile_photo.png")
@@ -90,7 +104,7 @@ except Exception as e:
 
 # Vector Database Store
 vector_store_path = "vectorstore.pkl"
-raw_documents = DirectoryLoader(DOCS_DIR, glob="*.txt").load()  # Load only .txt files
+raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()  # Load only processed .txt files
 
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
