@@ -33,10 +33,12 @@ os.makedirs(TEXT_DIR, exist_ok=True)
 
 def clean_pdf_text(text):
     """Clean and structure extracted PDF text"""
-    text = re.sub(r'\s+', ' ', text).strip()
-    text = re.sub(r'(o|)\s*', '\n• ', text)
-    text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\n\1\n', text)
-    text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)
+    # Normalize line breaks and excessive whitespace
+    text = re.sub(r'\n\s*\n+', '\n', text)  # Remove multiple newlines
+    text = re.sub(r'\s+', ' ', text).strip()  # Collapse spaces
+    text = re.sub(r'(o|)\s*', '\n• ', text)  # Handle bullet points
+    text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\n\1\n', text)  # Fix headers
+    text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)  # Fix tables
     return text
 
 # Sidebar for document upload and contact info
@@ -60,6 +62,7 @@ with st.sidebar:
                         txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
                         with open(txt_filename, "w", encoding="utf-8") as f:
                             f.write(cleaned_text)
+                        logging.debug(f"Cleaned text saved to {txt_filename}: {cleaned_text[:200]}...")
                     else:
                         st.warning(f"No extractable text found in {uploaded_file.name}. Skipping.")
                 except Exception as e:
@@ -85,9 +88,9 @@ with st.sidebar:
                 if raw_documents:
                     try:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=300,  # Reduced for precision
+                            chunk_size=300,
                             chunk_overlap=50,
-                            separators=["\n\n", "\n", " ", ""]
+                            separators=["\n", " ", ""]
                         )
                         documents = text_splitter.split_documents(raw_documents)
                         vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -145,7 +148,7 @@ elif raw_documents:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=300,
                 chunk_overlap=50,
-                separators=["\n\n", "\n", " ", ""]
+                separators=["\n", " ", ""]
             )
             documents = text_splitter.split_documents(raw_documents)
             vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -189,10 +192,15 @@ Document Context: {{context}}"""),
 
 def extract_birth_date(context, query):
     """Extract birth date from context if query is about birth"""
-    if "born" in query.lower() and ("choubey" in query.lower() or "mr." in query.lower() or "rajiv" in query.lower()):
-        match = re.search(r'born.*?(\d{1,2}(?:st|nd|rd|th)?\s+\w+,\s+\d{4})', context, re.IGNORECASE)
+    if "born" in query.lower() and any(kw in query.lower() for kw in ["choubey", "mr.", "rajiv"]):
+        # Normalize context to handle fragmented text
+        normalized_context = re.sub(r'\s+', ' ', context.replace('\n', ' ')).strip()
+        match = re.search(r'born\s*(?:on)?\s*(\d{1,2}(?:st|nd|rd|th)?\s+\w+\s*,\s*\d{4})', normalized_context, re.IGNORECASE)
         if match:
+            logging.debug(f"Birth date matched: {match.group(1)}")
             return match.group(1)
+        else:
+            logging.debug("No birth date match found in context.")
     return None
 
 def clean_response(response):
@@ -200,8 +208,8 @@ def clean_response(response):
     response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
     response = re.sub(r'\n{3,}', '\n\n', response)
     response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
-    # Remove generic placeholders
-    response = re.sub(r'(?i)let me check that for you|haven\'t asked a question', '', response)
+    # Remove all generic placeholders
+    response = re.sub(r'(?i)(let me check that for you|haven\'t asked a question|it seems like you|what would you like to know)', '', response)
     return response.strip()
 
 # Chat input
@@ -215,7 +223,7 @@ if user_input:
     
     if vectorstore:
         try:
-            relevant_docs = vectorstore.similarity_search(user_input, k=5)  # Increased k for better coverage
+            relevant_docs = vectorstore.similarity_search(user_input, k=5)
             context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
                                  for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
             logging.debug(f"Retrieved Context: {context}")
@@ -235,20 +243,25 @@ if user_input:
         direct_answer = f"Mr. Choubey was born on {birth_date}.\n\n**Additional Context**:\n"
     else:
         direct_answer = ""
+        logging.debug("No birth date extracted.")
     
     # Format the prompt
     prompt = prompt_template.format_messages(context=context, input=user_input)
     
-    # Invoke the LLM
-    try:
-        response = llm.invoke(prompt).content
-        cleaned_response = direct_answer + clean_response(response)
-        if not direct_answer and not response.strip():
-            cleaned_response = "I couldn't find an answer in the documents. Try uploading more files or rephrasing your question."
-    except Exception as e:
-        st.error(f"Error generating response: {e}")
-        cleaned_response = "Sorry, I encountered an error while generating a response."
-    
+    # Invoke the LLM only if no direct answer is found or additional context is needed
+    if not birth_date or personality.lower() != "formal":
+        try:
+            response = llm.invoke(prompt).content
+            cleaned_response = direct_answer + clean_response(response)
+            if not direct_answer and not response.strip():
+                cleaned_response = "I couldn't find an answer in the documents. Try uploading more files or rephrasing your question."
+        except Exception as e:
+            st.error(f"Error generating response: {e}")
+            cleaned_response = "Sorry, I encountered an error while generating a response."
+    else:
+        # Use direct answer without LLM if birth date is found in formal mode
+        cleaned_response = direct_answer + "• Extracted directly from the document."
+
     st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
         st.markdown(cleaned_response)
