@@ -75,6 +75,7 @@ with st.sidebar:
                     st.success(f"Deleted processed text file for {doc}")
 
                 # Rebuild the vector store
+                vector_store_path = "vectorstore.pkl"
                 if os.path.exists(vector_store_path):
                     os.remove(vector_store_path)  # Remove the old vector store
                 raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
@@ -166,7 +167,7 @@ for message in st.session_state.messages:
 # Updated prompt template for context-aware responses
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
-               "Given the context below, extract and summarize the key points concisely. If no context is provided, respond accordingly.\n"
+               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly.\n"
                "Context: {{context}}"),
     ("user", "{{input}}")
 ])
