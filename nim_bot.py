@@ -38,6 +38,7 @@ def clean_pdf_text(text):
     text = re.sub(r'(o|)\s*', '• ', text)  # Replace bullet points
     text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\1', text)  # Add line breaks for numbered lists
     text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)  # Add line breaks for table-like structures
+    text = re.sub(r'([a-zA-Z])\s*\n\s*([a-zA-Z])', r'\1 \2', text)  # Fix broken words across lines
     return text
 
 
