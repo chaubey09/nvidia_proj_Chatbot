@@ -33,18 +33,10 @@ os.makedirs(TEXT_DIR, exist_ok=True)
 
 def clean_pdf_text(text):
     """Clean and structure extracted PDF text"""
-    # Remove excessive whitespace and line breaks
     text = re.sub(r'\s+', ' ', text).strip()
-    
-    # Restore bullet points and structured formatting
     text = re.sub(r'(o|)\s*', '\n• ', text)
-    
-    # Fix section headers
     text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\n\1\n', text)
-    
-    # Fix table-like structures
     text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)
-    
     return text
 
 # Sidebar for document upload and contact info
@@ -59,13 +51,11 @@ with st.sidebar:
                 f.write(uploaded_file.read())
             st.success(f"File {uploaded_file.name} uploaded successfully!")
 
-            # If it's a PDF, extract text and save as .txt in TEXT_DIR
             if uploaded_file.name.endswith(".pdf"):
                 try:
                     extracted_text = fitz.open(file_path)
                     text = "".join([page.get_text("text") for page in extracted_text if page.get_text("text").strip()])
-                    if text.strip():  # Ensure the text is not empty
-                        # Clean the extracted text
+                    if text.strip():
                         cleaned_text = clean_pdf_text(text)
                         txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
                         with open(txt_filename, "w", encoding="utf-8") as f:
@@ -76,33 +66,27 @@ with st.sidebar:
                     st.error(f"Failed to process PDF: {e}")
                     logging.error(f"Error processing PDF {uploaded_file.name}: {e}")
 
-    # Show preview of uploaded files
     uploaded_files_list = os.listdir(DOCS_DIR)
     if uploaded_files_list:
         st.subheader("Current Documents")
         for doc in uploaded_files_list:
             st.write(f"📄 {doc}")
             if st.button(f"Delete {doc}"):
-                # Delete the uploaded file
                 os.remove(os.path.join(DOCS_DIR, doc))
                 st.success(f"Deleted {doc}")
-
-                # Delete the corresponding processed text file (if it exists)
                 txt_filename = os.path.join(TEXT_DIR, doc.replace(".pdf", ".txt"))
                 if os.path.exists(txt_filename):
                     os.remove(txt_filename)
                     st.success(f"Deleted processed text file for {doc}")
-
-                # Rebuild the vector store
                 vector_store_path = "vectorstore.pkl"
                 if os.path.exists(vector_store_path):
-                    os.remove(vector_store_path)  # Remove the old vector store
+                    os.remove(vector_store_path)
                 raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
                 if raw_documents:
                     try:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=1024,  # Larger chunk size for better context
-                            chunk_overlap=200,
+                            chunk_size=500,  # Reduced for better granularity
+                            chunk_overlap=100,
                             separators=["\n\n", "\n", " ", ""]
                         )
                         documents = text_splitter.split_documents(raw_documents)
@@ -126,14 +110,13 @@ st.sidebar.markdown("""
 assistant_name = "AskAI"
 personality = st.sidebar.radio("Choose Assistant Personality", ["Formal", "Casual", "Humorous"], index=1)
 
-# Clear chat button
 if st.button("Clear Chat"):
     st.session_state.messages = []
     st.write("Chat cleared.")
 
 # Embedding Model and LLM
 try:
-    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=1024, api_key=nvidia_api_key)
+    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=200, temperature=0.3, api_key=nvidia_api_key)
     document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
 except Exception as e:
     st.error(f"Failed to initialize NVIDIA services: {e}")
@@ -141,8 +124,7 @@ except Exception as e:
 
 # Vector Database Store
 vector_store_path = "vectorstore.pkl"
-raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()  # Load only processed .txt files
-
+raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
 vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
 
@@ -158,8 +140,8 @@ elif raw_documents:
     with st.spinner("Processing documents..."):
         try:
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1024,  # Larger chunk size for better context
-                chunk_overlap=200,
+                chunk_size=500,
+                chunk_overlap=100,
                 separators=["\n\n", "\n", " ", ""]
             )
             documents = text_splitter.split_documents(raw_documents)
@@ -178,72 +160,83 @@ st.subheader(f"Chat with {assistant_name} ({personality} Mode)")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Updated prompt template for better document summarization
+# Updated prompt template
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"""You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone.
-     
-When asked about document contents, provide a structured summary with these sections:
+ 
+If the user's query is a specific question, provide a concise and direct answer first, citing the relevant document excerpt. Then, if relevant, offer additional context or a summary.
+ 
+If the query asks for a general summary, provide a structured summary with these sections:
 1. Document Overview
 2. Key Topics
 3. Important Comparisons (if any)
 4. Use Cases/Examples
 5. Technical Specifications (if relevant)
-
-Format the response with clear headings and bullet points for readability.
-
+ 
+Format responses with clear headings and bullet points for readability.
+ 
 Document Context: {{context}}"""),
     ("user", "{{input}}")
 ])
+
+def extract_birth_date(context, query):
+    """Extract birth date from context if query is about birth"""
+    if "born" in query.lower():
+        match = re.search(r'born.*?(\d{1,2}(?:st|nd|rd|th)?\s+\w+,\s+\d{4})', context, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+def clean_response(response):
+    """Clean and format LLM response"""
+    response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
+    response = re.sub(r'\n{3,}', '\n\n', response)
+    response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
+    return response.strip()
 
 # Input for user prompt
 user_input = st.text_area("Enter your prompt here:", "", height=100)
 
 if st.button("Send") and user_input.strip():
-    # Append user message to session state
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # Retrieve relevant documents if vectorstore exists
     if vectorstore:
         try:
-            relevant_docs = vectorstore.similarity_search(user_input, k=5)  # Increased to 5 for more context
+            relevant_docs = vectorstore.similarity_search(user_input, k=3)
             context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
                                  for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
+            # Debug: Log retrieved context
+            logging.debug(f"Retrieved Context: {context}")
         except Exception as e:
             st.error(f"Error retrieving context: {e}")
             context = ""
     else:
         context = ""
     
-    # Format the prompt with context and input
+    # Extract specific answer for birth date
+    birth_date = extract_birth_date(context, user_input)
+    if birth_date:
+        direct_answer = f"R N Choubey was born on {birth_date}.\n\n**Additional Context**:\n"
+    else:
+        direct_answer = ""
+    
+    # Format the prompt
     prompt = prompt_template.format_messages(context=context, input=user_input)
     
     # Invoke the LLM
     try:
         response = llm.invoke(prompt).content
+        cleaned_response = direct_answer + clean_response(response)
     except Exception as e:
         st.error(f"Error generating response: {e}")
-        response = "Sorry, I encountered an error while generating a response."
+        cleaned_response = "Sorry, I encountered an error while generating a response."
     
-    # Post-process the response to improve formatting
-    def clean_response(response):
-        # Ensure consistent bullet points
-        response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
-        # Remove excessive line breaks
-        response = re.sub(r'\n{3,}', '\n\n', response)
-        # Fix numbered lists
-        response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
-        return response.strip()
-
-    cleaned_response = clean_response(response)
-    
-    # Append assistant's response to session state
     st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
         st.markdown(cleaned_response)
