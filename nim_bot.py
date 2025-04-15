@@ -46,10 +46,10 @@ with st.sidebar:
             if uploaded_file.name.endswith(".pdf"):
                 try:
                     extracted_text = fitz.open(file_path)
-                    text = "".join([page.get_text() for page in extracted_text if page.get_text().strip()])
+                    text = "".join([page.get_text("text") for page in extracted_text if page.get_text("text").strip()])
                     if text.strip():  # Ensure the text is not empty
                         txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
-                        with open(txt_filename, "w") as f:
+                        with open(txt_filename, "w", encoding="utf-8") as f:
                             f.write(text)
                     else:
                         st.warning(f"No extractable text found in {uploaded_file.name}. Skipping.")
@@ -65,7 +65,6 @@ with st.sidebar:
             st.write(f"📄 {doc}")
             if st.button(f"Delete {doc}"):
                 # Delete the uploaded file
-                # Delete the uploaded file
                 os.remove(os.path.join(DOCS_DIR, doc))
                 st.success(f"Deleted {doc}")
 
@@ -76,6 +75,23 @@ with st.sidebar:
                     st.success(f"Deleted processed text file for {doc}")
 
                 # Rebuild the vector store
+                if os.path.exists(vector_store_path):
+                    os.remove(vector_store_path)  # Remove the old vector store
+                raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
+                if raw_documents:
+                    try:
+                        text_splitter = RecursiveCharacterTextSplitter(
+                            chunk_size=512,
+                            chunk_overlap=100,
+                            separators=["\n\n", "\n", " ", ""]
+                        )
+                        documents = text_splitter.split_documents(raw_documents)
+                        vectorstore = FAISS.from_documents(documents, document_embedder)
+                        with open(vector_store_path, "wb") as f:
+                            pickle.dump(vectorstore, f)
+                        st.success("Vector store updated successfully.")
+                    except Exception as e:
+                        st.error(f"Failed to rebuild vector store: {e}")
                 st.rerun()
 
 st.sidebar.subheader("Contact Information")
@@ -150,7 +166,7 @@ for message in st.session_state.messages:
 # Updated prompt template for context-aware responses
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
-               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly.\n"
+               "Given the context below, extract and summarize the key points concisely. If no context is provided, respond accordingly.\n"
                "Context: {{context}}"),
     ("user", "{{input}}")
 ])
@@ -169,6 +185,7 @@ if st.button("Send") and user_input.strip():
         try:
             relevant_docs = vectorstore.similarity_search(user_input, k=3)
             context = "\n".join([f"- {doc.page_content.strip()}" for doc in relevant_docs if doc.page_content.strip()])
+            st.write("Retrieved Context:", context)  # Debugging
         except Exception as e:
             st.error(f"Error retrieving context: {e}")
             context = ""
@@ -178,9 +195,6 @@ if st.button("Send") and user_input.strip():
     # Inform the user if no context is available
     if not context.strip():
         st.info("No relevant documents found in the knowledge base.")
-    
-    # Debugging: Show retrieved context
-    st.write("Context provided:", context)
     
     # Format the prompt with context and input
     prompt = prompt_template.format_messages(context=context, input=user_input)
