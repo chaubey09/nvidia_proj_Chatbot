@@ -1,6 +1,6 @@
 import streamlit as st
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import FAISS
 import pickle
@@ -86,7 +86,11 @@ if vector_store_exists:
     st.sidebar.success("Existing vector store loaded successfully.")
 elif raw_documents:
     with st.spinner("Processing documents..."):
-        text_splitter = CharacterTextSplitter(chunk_size=512, chunk_overlap=200)
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=512,
+            chunk_overlap=100,
+            separators=["\n\n", "\n", " ", ""]
+        )
         documents = text_splitter.split_documents(raw_documents)
         vectorstore = FAISS.from_documents(documents, document_embedder)
         with open(vector_store_path, "wb") as f:
@@ -108,8 +112,10 @@ for message in st.session_state.messages:
 
 # Updated prompt template for context-aware responses
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. Use the following context to inform your responses if relevant: {{context}}"),
-    ("user", "{{input}}")
+    ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
+               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly."),
+    ("user", "{{input}}"),
+    ("context", "{{context}}")
 ])
 
 # Input for user prompt
@@ -124,7 +130,7 @@ if st.button("Send") and user_input.strip():
     # Retrieve relevant documents if vectorstore exists
     if vectorstore:
         relevant_docs = vectorstore.similarity_search(user_input, k=3)
-        context = "\n".join([doc.page_content for doc in relevant_docs])
+        context = "\n".join([f"- {doc.page_content.strip()}" for doc in relevant_docs])
     else:
         context = ""
     
@@ -137,9 +143,17 @@ if st.button("Send") and user_input.strip():
     # Invoke the LLM
     response = llm.invoke(prompt).content
     
+    # Post-process the response to remove unnecessary clutter
+    def clean_response(response):
+        # Remove extra whitespace and line breaks
+        response = response.strip()
+        # Replace multiple newlines with a single newline
+        response = "\n".join([line.strip() for line in response.split("\n") if line.strip()])
+        return response
+
+    cleaned_response = clean_response(response)
+    
     # Append assistant's response to session state
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
-        st.markdown(response)
-
-
+        st.markdown(cleaned_response)
