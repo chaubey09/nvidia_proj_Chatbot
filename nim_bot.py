@@ -85,7 +85,7 @@ with st.sidebar:
                 if raw_documents:
                     try:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=500,  # Reduced for better granularity
+                            chunk_size=500,
                             chunk_overlap=100,
                             separators=["\n\n", "\n", " ", ""]
                         )
@@ -99,8 +99,11 @@ with st.sidebar:
                 st.rerun()
 
 st.sidebar.subheader("Contact Information")
-profile_pic = Image.open("profile_photo.png")
-st.sidebar.image(profile_pic, width=150, use_container_width=False, caption="Anmol Chaubey", output_format="PNG")
+try:
+    profile_pic = Image.open("profile_photo.png")
+    st.sidebar.image(profile_pic, width=150, use_container_width=False, caption="Anmol Chaubey", output_format="PNG")
+except FileNotFoundError:
+    st.sidebar.warning("Profile photo not found. Skipping image display.")
 st.sidebar.markdown("""
     **Name:** Anmol Chaubey  
     **Email:** anmolchaubey820@gmail.com  
@@ -160,6 +163,7 @@ st.subheader(f"Chat with {assistant_name} ({personality} Mode)")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Display conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -198,10 +202,13 @@ def clean_response(response):
     response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
     return response.strip()
 
-# Input for user prompt
-user_input = st.text_area("Enter your prompt here:", "", height=100)
+# Simplified chat input handling
+with st.form(key="chat_form"):
+    user_input = st.text_area("Enter your prompt here:", height=100, key="user_input")
+    submit_button = st.form_submit_button("Send")
 
-if st.button("Send") and user_input.strip():
+if submit_button and user_input.strip():
+    logging.debug(f"User Input: {user_input}")
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
@@ -211,7 +218,6 @@ if st.button("Send") and user_input.strip():
             relevant_docs = vectorstore.similarity_search(user_input, k=3)
             context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
                                  for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
-            # Debug: Log retrieved context
             logging.debug(f"Retrieved Context: {context}")
         except Exception as e:
             st.error(f"Error retrieving context: {e}")
@@ -240,3 +246,5 @@ if st.button("Send") and user_input.strip():
     st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
         st.markdown(cleaned_response)
+elif submit_button and not user_input.strip():
+    st.warning("Please enter a prompt before submitting.")
