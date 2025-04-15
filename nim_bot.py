@@ -10,13 +10,17 @@ import os
 import fitz  # PyMuPDF for PDF parsing
 import logging
 
-# Enable logging for debugging
+# Enable detailed logging for debugging
 logging.basicConfig(level=logging.DEBUG)
 
 # Fetch the NVIDIA API key from st.secrets
-nvidia_api_key = st.secrets["nvidia_api_key"]
-if not nvidia_api_key:
-    raise ValueError("NVIDIA API Key not found! Make sure it's set in the secrets.toml file.")
+try:
+    nvidia_api_key = st.secrets["nvidia_api_key"]
+    if not nvidia_api_key:
+        raise ValueError("NVIDIA API Key not found! Make sure it's set in the secrets.toml file.")
+except KeyError:
+    st.error("NVIDIA API Key not found in secrets.toml. Please add it to use this app.")
+    st.stop()
 
 st.set_page_config(layout="wide")
 
@@ -37,11 +41,18 @@ with st.sidebar:
 
             # If it's a PDF, extract text and save as .txt
             if uploaded_file.name.endswith(".pdf"):
-                extracted_text = fitz.open(file_path)
-                text = "".join([page.get_text() for page in extracted_text])
-                txt_filename = file_path.replace(".pdf", ".txt")
-                with open(txt_filename, "w") as f:
-                    f.write(text)
+                try:
+                    extracted_text = fitz.open(file_path)
+                    text = "".join([page.get_text() for page in extracted_text if page.get_text().strip()])
+                    if text.strip():  # Ensure the text is not empty
+                        txt_filename = file_path.replace(".pdf", ".txt")
+                        with open(txt_filename, "w") as f:
+                            f.write(text)
+                    else:
+                        st.warning(f"No extractable text found in {uploaded_file.name}. Skipping.")
+                except Exception as e:
+                    st.error(f"Failed to process PDF: {e}")
+                    logging.error(f"Error processing PDF {uploaded_file.name}: {e}")
 
     # Show preview of uploaded files
     if os.listdir(DOCS_DIR):
@@ -70,8 +81,12 @@ if st.button("Clear Chat"):
     st.write("Chat cleared.")
 
 # Embedding Model and LLM
-llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=1024, api_key=nvidia_api_key)
-document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
+try:
+    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=1024, api_key=nvidia_api_key)
+    document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
+except Exception as e:
+    st.error(f"Failed to initialize NVIDIA services: {e}")
+    st.stop()
 
 # Vector Database Store
 vector_store_path = "vectorstore.pkl"
@@ -81,21 +96,28 @@ vector_store_exists = os.path.exists(vector_store_path)
 vectorstore = None
 
 if vector_store_exists:
-    with open(vector_store_path, "rb") as f:
-        vectorstore = pickle.load(f)
-    st.sidebar.success("Existing vector store loaded successfully.")
+    try:
+        with open(vector_store_path, "rb") as f:
+            vectorstore = pickle.load(f)
+        st.sidebar.success("Existing vector store loaded successfully.")
+    except Exception as e:
+        st.error(f"Failed to load vector store: {e}")
+        vectorstore = None
 elif raw_documents:
     with st.spinner("Processing documents..."):
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512,
-            chunk_overlap=100,
-            separators=["\n\n", "\n", " ", ""]
-        )
-        documents = text_splitter.split_documents(raw_documents)
-        vectorstore = FAISS.from_documents(documents, document_embedder)
-        with open(vector_store_path, "wb") as f:
-            pickle.dump(vectorstore, f)
-    st.success("Vector store created and saved.")
+        try:
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=512,
+                chunk_overlap=100,
+                separators=["\n\n", "\n", " ", ""]
+            )
+            documents = text_splitter.split_documents(raw_documents)
+            vectorstore = FAISS.from_documents(documents, document_embedder)
+            with open(vector_store_path, "wb") as f:
+                pickle.dump(vectorstore, f)
+            st.success("Vector store created and saved.")
+        except Exception as e:
+            st.error(f"Failed to process documents: {e}")
 else:
     st.sidebar.warning("No documents available to process!", icon="⚠️")
 
@@ -129,10 +151,18 @@ if st.button("Send") and user_input.strip():
     
     # Retrieve relevant documents if vectorstore exists
     if vectorstore:
-        relevant_docs = vectorstore.similarity_search(user_input, k=3)
-        context = "\n".join([f"- {doc.page_content.strip()}" for doc in relevant_docs])
+        try:
+            relevant_docs = vectorstore.similarity_search(user_input, k=3)
+            context = "\n".join([f"- {doc.page_content.strip()}" for doc in relevant_docs if doc.page_content.strip()])
+        except Exception as e:
+            st.error(f"Error retrieving context: {e}")
+            context = ""
     else:
         context = ""
+    
+    # Inform the user if no context is available
+    if not context.strip():
+        st.info("No relevant documents found in the knowledge base.")
     
     # Debugging: Show retrieved context
     st.write("Context provided:", context)
@@ -141,15 +171,17 @@ if st.button("Send") and user_input.strip():
     prompt = prompt_template.format_messages(context=context, input=user_input)
     
     # Invoke the LLM
-    response = llm.invoke(prompt).content
+    try:
+        response = llm.invoke(prompt).content
+    except Exception as e:
+        st.error(f"Error generating response: {e}")
+        response = "Sorry, I encountered an error while generating a response."
     
     # Post-process the response to remove unnecessary clutter
-    def clean_response(response):
-        # Remove extra whitespace and line breaks
+    def clean_response(response, max_length=500):
         response = response.strip()
-        # Replace multiple newlines with a single newline
         response = "\n".join([line.strip() for line in response.split("\n") if line.strip()])
-        return response
+        return response[:max_length] + "..." if len(response) > max_length else response
 
     cleaned_response = clean_response(response)
     
