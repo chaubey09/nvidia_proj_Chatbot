@@ -189,7 +189,7 @@ Document Context: {{context}}"""),
 
 def extract_birth_date(context, query):
     """Extract birth date from context if query is about birth"""
-    if "born" in query.lower():
+    if "born" in query.lower() and ("choubey" in query.lower() or "mr." in query.lower()):
         match = re.search(r'born.*?(\d{1,2}(?:st|nd|rd|th)?\s+\w+,\s+\d{4})', context, re.IGNORECASE)
         if match:
             return match.group(1)
@@ -202,12 +202,10 @@ def clean_response(response):
     response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
     return response.strip()
 
-# Simplified chat input handling
-with st.form(key="chat_form"):
-    user_input = st.text_area("Enter your prompt here:", height=100, key="user_input")
-    submit_button = st.form_submit_button("Send")
+# Simplified chat input with st.chat_input
+user_input = st.chat_input("Enter your prompt here:")
 
-if submit_button and user_input.strip():
+if user_input:
     logging.debug(f"User Input: {user_input}")
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
@@ -228,7 +226,7 @@ if submit_button and user_input.strip():
     # Extract specific answer for birth date
     birth_date = extract_birth_date(context, user_input)
     if birth_date:
-        direct_answer = f"R N Choubey was born on {birth_date}.\n\n**Additional Context**:\n"
+        direct_answer = f"Mr. Choubey was born on {birth_date}.\n\n**Additional Context**:\n"
     else:
         direct_answer = ""
     
@@ -238,6 +236,9 @@ if submit_button and user_input.strip():
     # Invoke the LLM
     try:
         response = llm.invoke(prompt).content
+        # Avoid default "no question" message
+        if "haven't asked a question" in response.lower():
+            response = "Let me check that for you..."
         cleaned_response = direct_answer + clean_response(response)
     except Exception as e:
         st.error(f"Error generating response: {e}")
@@ -246,5 +247,3 @@ if submit_button and user_input.strip():
     st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
         st.markdown(cleaned_response)
-elif submit_button and not user_input.strip():
-    st.warning("Please enter a prompt before submitting.")
