@@ -31,20 +31,19 @@ TEXT_DIR = os.path.abspath("./processed_texts")
 os.makedirs(DOCS_DIR, exist_ok=True)
 os.makedirs(TEXT_DIR, exist_ok=True)
 
+
 def clean_pdf_text(text):
     """Clean and structure extracted PDF text"""
-    # Normalize line breaks and excessive whitespace
-    text = re.sub(r'\n\s*\n+', '\n', text)  # Remove multiple newlines
-    text = re.sub(r'\s+', ' ', text).strip()  # Collapse spaces
-    text = re.sub(r'(o|)\s*', '\n• ', text)  # Handle bullet points
-    text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\n\1\n', text)  # Fix headers
-    text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)  # Fix tables
+    text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+    text = re.sub(r'(o|)\s*', '• ', text)  # Replace bullet points
+    text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\1', text)  # Add line breaks for numbered lists
+    text = re.sub(r'(\|\s*.+?\s*\|)', r'\n\1\n', text)  # Add line breaks for table-like structures
     return text
+
 
 # Sidebar for document upload and contact info
 with st.sidebar:
     st.subheader("Add to the Knowledge Base")
-
     uploaded_files = st.file_uploader("Upload a file to the Knowledge Base:", type=["txt", "pdf"], accept_multiple_files=True)
     if uploaded_files:
         for uploaded_file in uploaded_files:
@@ -52,7 +51,6 @@ with st.sidebar:
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.read())
             st.success(f"File {uploaded_file.name} uploaded successfully!")
-
             if uploaded_file.name.endswith(".pdf"):
                 try:
                     extracted_text = fitz.open(file_path)
@@ -62,7 +60,6 @@ with st.sidebar:
                         txt_filename = os.path.join(TEXT_DIR, uploaded_file.name.replace(".pdf", ".txt"))
                         with open(txt_filename, "w", encoding="utf-8") as f:
                             f.write(cleaned_text)
-                        logging.debug(f"Cleaned text saved to {txt_filename}: {cleaned_text[:200]}...")
                     else:
                         st.warning(f"No extractable text found in {uploaded_file.name}. Skipping.")
                 except Exception as e:
@@ -90,7 +87,7 @@ with st.sidebar:
                         text_splitter = RecursiveCharacterTextSplitter(
                             chunk_size=300,
                             chunk_overlap=50,
-                            separators=["\n", " ", ""]
+                            separators=["\n\n", "\n", " ", ""]
                         )
                         documents = text_splitter.split_documents(raw_documents)
                         vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -107,6 +104,7 @@ try:
     st.sidebar.image(profile_pic, width=150, use_container_width=False, caption="Anmol Chaubey", output_format="PNG")
 except FileNotFoundError:
     st.sidebar.warning("Profile photo not found. Skipping image display.")
+
 st.sidebar.markdown("""
     **Name:** Anmol Chaubey  
     **Email:** anmolchaubey820@gmail.com  
@@ -148,7 +146,7 @@ elif raw_documents:
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=300,
                 chunk_overlap=50,
-                separators=["\n", " ", ""]
+                separators=["\n\n", "\n", " ", ""]
             )
             documents = text_splitter.split_documents(raw_documents)
             vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -162,7 +160,6 @@ else:
 
 # Chat Interface
 st.subheader(f"Chat with {assistant_name} ({personality} Mode)")
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -174,57 +171,50 @@ for message in st.session_state.messages:
 # Updated prompt template
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"""You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone.
- 
 If the user's query is a specific question, provide a concise and direct answer first, citing the relevant document excerpt. Then, if relevant, offer additional context or a summary.
- 
 If the query asks for a general summary, provide a structured summary with these sections:
 1. Document Overview
 2. Key Topics
 3. Important Comparisons (if any)
 4. Use Cases/Examples
 5. Technical Specifications (if relevant)
- 
 Format responses with clear headings and bullet points for readability.
- 
 Document Context: {{context}}"""),
     ("user", "{{input}}")
 ])
 
+
 def extract_birth_date(context, query):
     """Extract birth date from context if query is about birth"""
-    if "born" in query.lower() and any(kw in query.lower() for kw in ["choubey", "mr.", "rajiv"]):
-        # Normalize context to handle fragmented text
-        normalized_context = re.sub(r'\s+', ' ', context.replace('\n', ' ')).strip()
-        match = re.search(r'born\s*(?:on)?\s*(\d{1,2}(?:st|nd|rd|th)?\s+\w+\s*,\s*\d{4})', normalized_context, re.IGNORECASE)
+    if "born" in query.lower() and ("choubey" in query.lower() or "mr." in query.lower() or "rajiv" in query.lower()):
+        match = re.search(r'(?:born|b\W*orn)\W*(\d{1,2}(?:st|nd|rd|th)?\s+\w+,\s+\d{4})', context, re.IGNORECASE)
         if match:
-            logging.debug(f"Birth date matched: {match.group(1)}")
             return match.group(1)
-        else:
-            logging.debug("No birth date match found in context.")
     return None
+
 
 def clean_response(response):
     """Clean and format LLM response"""
     response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
     response = re.sub(r'\n{3,}', '\n\n', response)
     response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
-    # Remove all generic placeholders
-    response = re.sub(r'(?i)(let me check that for you|haven\'t asked a question|it seems like you|what would you like to know)', '', response)
+    # Remove generic placeholders
+    response = re.sub(r'(?i)let me check that for you|haven\'t asked a question', '', response)
     return response.strip()
+
 
 # Chat input
 user_input = st.chat_input("Enter your prompt here:")
-
 if user_input:
     logging.debug(f"User Input: {user_input}")
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
-    
+
     if vectorstore:
         try:
-            relevant_docs = vectorstore.similarity_search(user_input, k=5)
-            context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
+            relevant_docs = vectorstore.similarity_search(user_input, k=5)  # Increased k for better coverage
+            context = "\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
                                  for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
             logging.debug(f"Retrieved Context: {context}")
             # Display context for debugging
@@ -236,31 +226,26 @@ if user_input:
     else:
         context = ""
         st.warning("No vector store available. Please upload documents.")
-    
+
     # Extract specific answer for birth date
     birth_date = extract_birth_date(context, user_input)
     if birth_date:
-        direct_answer = f"Mr. Choubey was born on {birth_date}.\n\n**Additional Context**:\n"
+        direct_answer = f"Mr. Choubey was born on {birth_date}.\n**Additional Context**:\n"
     else:
         direct_answer = ""
-        logging.debug("No birth date extracted.")
-    
+
     # Format the prompt
     prompt = prompt_template.format_messages(context=context, input=user_input)
-    
-    # Invoke the LLM only if no direct answer is found or additional context is needed
-    if not birth_date or personality.lower() != "formal":
-        try:
-            response = llm.invoke(prompt).content
-            cleaned_response = direct_answer + clean_response(response)
-            if not direct_answer and not response.strip():
-                cleaned_response = "I couldn't find an answer in the documents. Try uploading more files or rephrasing your question."
-        except Exception as e:
-            st.error(f"Error generating response: {e}")
-            cleaned_response = "Sorry, I encountered an error while generating a response."
-    else:
-        # Use direct answer without LLM if birth date is found in formal mode
-        cleaned_response = direct_answer + "• Extracted directly from the document."
+
+    # Invoke the LLM
+    try:
+        response = llm.invoke(prompt).content
+        cleaned_response = direct_answer + clean_response(response)
+        if not direct_answer and not response.strip():
+            cleaned_response = "I couldn't find an answer in the documents. Try uploading more files or rephrasing your question."
+    except Exception as e:
+        st.error(f"Error generating response: {e}")
+        cleaned_response = "Sorry, I encountered an error while generating a response."
 
     st.session_state.messages.append({"role": "assistant", "content": cleaned_response})
     with st.chat_message("assistant"):
