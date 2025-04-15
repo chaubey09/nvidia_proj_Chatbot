@@ -85,8 +85,8 @@ with st.sidebar:
                 if raw_documents:
                     try:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=500,
-                            chunk_overlap=100,
+                            chunk_size=300,  # Reduced for precision
+                            chunk_overlap=50,
                             separators=["\n\n", "\n", " ", ""]
                         )
                         documents = text_splitter.split_documents(raw_documents)
@@ -119,7 +119,7 @@ if st.button("Clear Chat"):
 
 # Embedding Model and LLM
 try:
-    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=200, temperature=0.3, api_key=nvidia_api_key)
+    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=300, temperature=0.2, api_key=nvidia_api_key)
     document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
 except Exception as e:
     st.error(f"Failed to initialize NVIDIA services: {e}")
@@ -143,8 +143,8 @@ elif raw_documents:
     with st.spinner("Processing documents..."):
         try:
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=100,
+                chunk_size=300,
+                chunk_overlap=50,
                 separators=["\n\n", "\n", " ", ""]
             )
             documents = text_splitter.split_documents(raw_documents)
@@ -189,7 +189,7 @@ Document Context: {{context}}"""),
 
 def extract_birth_date(context, query):
     """Extract birth date from context if query is about birth"""
-    if "born" in query.lower() and ("choubey" in query.lower() or "mr." in query.lower()):
+    if "born" in query.lower() and ("choubey" in query.lower() or "mr." in query.lower() or "rajiv" in query.lower()):
         match = re.search(r'born.*?(\d{1,2}(?:st|nd|rd|th)?\s+\w+,\s+\d{4})', context, re.IGNORECASE)
         if match:
             return match.group(1)
@@ -200,9 +200,11 @@ def clean_response(response):
     response = re.sub(r'(^|\n)\s*[•o]\s*', '\n• ', response)
     response = re.sub(r'\n{3,}', '\n\n', response)
     response = re.sub(r'(\d+)\.\s+', r'\1. ', response)
+    # Remove generic placeholders
+    response = re.sub(r'(?i)let me check that for you|haven\'t asked a question', '', response)
     return response.strip()
 
-# Simplified chat input with st.chat_input
+# Chat input
 user_input = st.chat_input("Enter your prompt here:")
 
 if user_input:
@@ -213,15 +215,19 @@ if user_input:
     
     if vectorstore:
         try:
-            relevant_docs = vectorstore.similarity_search(user_input, k=3)
+            relevant_docs = vectorstore.similarity_search(user_input, k=5)  # Increased k for better coverage
             context = "\n\n".join([f"**Document Excerpt {i+1}:**\n{doc.page_content.strip()}" 
                                  for i, doc in enumerate(relevant_docs) if doc.page_content.strip()])
             logging.debug(f"Retrieved Context: {context}")
+            # Display context for debugging
+            with st.expander("Debug: Retrieved Context"):
+                st.write(context if context else "No context retrieved.")
         except Exception as e:
             st.error(f"Error retrieving context: {e}")
             context = ""
     else:
         context = ""
+        st.warning("No vector store available. Please upload documents.")
     
     # Extract specific answer for birth date
     birth_date = extract_birth_date(context, user_input)
@@ -236,10 +242,9 @@ if user_input:
     # Invoke the LLM
     try:
         response = llm.invoke(prompt).content
-        # Avoid default "no question" message
-        if "haven't asked a question" in response.lower():
-            response = "Let me check that for you..."
         cleaned_response = direct_answer + clean_response(response)
+        if not direct_answer and not response.strip():
+            cleaned_response = "I couldn't find an answer in the documents. Try uploading more files or rephrasing your question."
     except Exception as e:
         st.error(f"Error generating response: {e}")
         cleaned_response = "Sorry, I encountered an error while generating a response."
