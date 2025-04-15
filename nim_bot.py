@@ -82,8 +82,8 @@ with st.sidebar:
                 if raw_documents:
                     try:
                         text_splitter = RecursiveCharacterTextSplitter(
-                            chunk_size=512,
-                            chunk_overlap=100,
+                            chunk_size=1024,  # Larger chunk size for better context
+                            chunk_overlap=200,
                             separators=["\n\n", "\n", " ", ""]
                         )
                         documents = text_splitter.split_documents(raw_documents)
@@ -139,8 +139,8 @@ elif raw_documents:
     with st.spinner("Processing documents..."):
         try:
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=512,
-                chunk_overlap=100,
+                chunk_size=1024,  # Larger chunk size for better context
+                chunk_overlap=200,
                 separators=["\n\n", "\n", " ", ""]
             )
             documents = text_splitter.split_documents(raw_documents)
@@ -167,7 +167,7 @@ for message in st.session_state.messages:
 # Updated prompt template for context-aware responses
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", f"You are a helpful AI assistant named {assistant_name}. You communicate in a {personality.lower()} tone. "
-               "Given the context below, extract and summarize all the main topics. If no context is provided, respond accordingly.\n"
+               "Given the context below, extract and summarize all the main topics concisely. Ensure the summary is clear and well-structured.\n"
                "Context: {{context}}"),
     ("user", "{{input}}")
 ])
