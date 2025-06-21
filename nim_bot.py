@@ -5,6 +5,7 @@ from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 import fitz  # PyMuPDF for PDF parsing
+from PIL import Image
 import os
 import pickle
 import re
@@ -76,7 +77,7 @@ if not vectorstore:
     else:
         st.sidebar.warning("No documents available to process. Please upload files.")
 
-# Sidebar for file upload, management, and personality selection
+# Sidebar for file upload, management, personality selection, and credentials
 with st.sidebar:
     st.subheader("Manage Documents")
     uploaded_files = st.file_uploader("Upload PDF or TXT files", type=["pdf", "txt"], accept_multiple_files=True)
@@ -159,6 +160,16 @@ with st.sidebar:
     st.subheader("Assistant Personality")
     personality = st.radio("Choose tone:", ["Formal", "Casual", "Humorous"], index=1)
 
+    # Credentials
+    st.subheader("Contact Information")
+    profile_pic = Image.open("profile_photo.jpg")
+    st.image(profile_pic, width=150, caption="Anmol Chaubey", output_format="PNG")
+    st.markdown("""
+    **Name:** Anmol Chaubey  
+    **Email:** anmolchaubey820@gmail.com  
+    [LinkedIn](https://www.linkedin.com/in/anmol-chaubey-120b42206/)
+    """)
+
 # Chat interface
 st.subheader(f"Chat with Documents ({personality} Mode)")
 if "messages" not in st.session_state:
@@ -170,7 +181,7 @@ for message in st.session_state.messages:
 
 # Prompt template with personality modes
 prompt_template = ChatPromptTemplate.from_template("""
-You are a document-based Q&A assistant. Communicate in a {personality} tone:
+You are a document-based Q&A assistant created by Anmol Chaubey. Communicate in a {personality} tone:
 - Formal: Use professional, concise, and academic language.
 - Casual: Use friendly, conversational language, like explaining to a peer.
 - Humorous: Use lighthearted, playful language with witty remarks, but stay accurate.
