@@ -63,6 +63,7 @@ if not vectorstore:
     if raw_documents:
         try:
             with st.spinner("Processing documents..."):
+                st.sidebar.info(f"Processing files: {[os.path.basename(doc.metadata['source']) for doc in raw_documents]}")
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
                 documents = text_splitter.split_documents(raw_documents)
                 vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -75,7 +76,7 @@ if not vectorstore:
     else:
         st.sidebar.warning("No documents available to process. Please upload files.")
 
-# Sidebar for file upload and management
+# Sidebar for file upload, management, and personality selection
 with st.sidebar:
     st.subheader("Manage Documents")
     uploaded_files = st.file_uploader("Upload PDF or TXT files", type=["pdf", "txt"], accept_multiple_files=True)
@@ -114,6 +115,7 @@ with st.sidebar:
         raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
         if raw_documents:
             try:
+                st.sidebar.info(f"Processing files: {[os.path.basename(doc.metadata['source']) for doc in raw_documents]}")
                 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
                 documents = text_splitter.split_documents(raw_documents)
                 vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -138,6 +140,7 @@ with st.sidebar:
                     os.remove(vector_store_path)
                 raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
                 if raw_documents:
+                    st.sidebar.info(f"Processing files: {[os.path.basename(doc.metadata['source']) for doc in raw_documents]}")
                     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
                     documents = text_splitter.split_documents(raw_documents)
                     vectorstore = FAISS.from_documents(documents, document_embedder)
@@ -152,8 +155,12 @@ with st.sidebar:
                 st.error(f"Failed to delete {doc}: {str(e)}")
                 logging.error(f"Error deleting {doc}: {str(e)}")
 
+    # Personality selection
+    st.subheader("Assistant Personality")
+    personality = st.radio("Choose tone:", ["Formal", "Casual", "Humorous"], index=1)
+
 # Chat interface
-st.subheader("Chat with Documents")
+st.subheader(f"Chat with Documents ({personality} Mode)")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -161,9 +168,13 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Prompt template with relevance check
+# Prompt template with personality modes
 prompt_template = ChatPromptTemplate.from_template("""
-You are a document-based Q&A assistant. Answer the question only if relevant information is found in the provided context. If the context is unrelated to the question or no relevant information is found, respond with: "No relevant information found in the documents. Please ask a question related to the uploaded documents."
+You are a document-based Q&A assistant. Communicate in a {personality} tone:
+- Formal: Use professional, concise, and academic language.
+- Casual: Use friendly, conversational language, like explaining to a peer.
+- Humorous: Use lighthearted, playful language with witty remarks, but stay accurate.
+Answer the question only if relevant information is found in the provided context. If the context is unrelated to the question or no relevant information is found, respond with: "No relevant information found in the documents. Please ask a question related to the uploaded documents."
 
 Question: {question}
 
@@ -191,7 +202,11 @@ if vectorstore:
             else:
                 # Generate response
                 with st.spinner("Generating response..."):
-                    response = llm.invoke(prompt_template.format_messages(question=user_input, context=context)).content
+                    response = llm.invoke(prompt_template.format_messages(
+                        personality=personality.lower(),
+                        question=user_input,
+                        context=context
+                    )).content
                     if not response.strip() or "no relevant information" in response.lower():
                         response = "No relevant information found in the documents. Please ask a question related to the uploaded documents."
             
