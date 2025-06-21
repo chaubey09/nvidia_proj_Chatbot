@@ -162,7 +162,7 @@ with st.sidebar:
 
     # Credentials
     st.subheader("Contact Information")
-    profile_pic = Image.open("profile_photo.jpg")
+    profile_pic = Image.open("profile_photo.png")
     st.image(profile_pic, width=150, caption="Anmol Chaubey", output_format="PNG")
     st.markdown("""
     **Name:** Anmol Chaubey  
