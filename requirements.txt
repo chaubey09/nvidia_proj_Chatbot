@@ -1,11 +1,10 @@
 streamlit
-langchain-core
+langchain
 langchain-community
+langchain-core
 langchain-nvidia-ai-endpoints
-python-dotenv
-Pillow
 faiss-cpu
-unstructured
-pdfminer.six
-pytesseract
+pillow
 PyMuPDF
+tqdm
+unstructured
