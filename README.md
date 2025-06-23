@@ -14,13 +14,16 @@ This project is a Streamlit-powered chatbot application that allows users to cha
 
 ### Requirements
 
-- Python 3.x
-- [Streamlit](https://streamlit.io/)
-- [LangChain](https://github.com/hwchase17/langchain) 
-- [NVIDIA AI Endpoints](https://developer.nvidia.com/nvidia-ai) (API key required)
-- [FAISS](https://github.com/facebookresearch/faiss)
-- [Pillow](https://python-pillow.org/) (For image handling)
-- [dotenv](https://pypi.org/project/python-dotenv/) (For environment variable management)
+streamlit
+langchain
+langchain-community
+langchain-core
+langchain-nvidia-ai-endpoints
+faiss-cpu
+pillow
+PyMuPDF
+tqdm
+unstructured
 
 ### Installation
 
