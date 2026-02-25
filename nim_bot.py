@@ -1,5 +1,6 @@
 import streamlit as st
-from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.vectorstores import FAISS
@@ -30,20 +31,33 @@ def clean_pdf_text(text):
     if not text:
         return ""
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)  # Remove non-ASCII characters
-    text = re.sub(r'\s+', ' ', text).strip()  # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text).strip()      # Normalize whitespace
     text = re.sub(r'(\d+\.\s+[A-Z][a-z]+)', r'\n\1', text)  # Add line breaks for numbered lists
     text = re.sub(r'([a-zA-Z])\s*\n\s*([a-zA-Z])', r'\1 \2', text)  # Fix broken words
     return text
 
-# Initialize NVIDIA models
+# Initialize Groq LLM
 try:
-    nvidia_api_key = st.secrets["NVIDIA_API_KEY"]
-    llm = ChatNVIDIA(model="meta/llama-3.1-8b-instruct", max_tokens=300, temperature=0.2, api_key=nvidia_api_key)
-    document_embedder = NVIDIAEmbeddings(model="nvidia/nv-embedqa-e5-v5", model_type="passage", api_key=nvidia_api_key)
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+    llm = ChatGroq(
+        model="llama3-8b-8192",
+        api_key=groq_api_key,
+        max_tokens=300,
+        temperature=0.2
+    )
 except Exception as e:
-    st.error(f"Failed to initialize NVIDIA services: {str(e)}")
-    logging.error(f"Error initializing NVIDIA services: {str(e)}")
+    st.error(f"Failed to initialize Groq LLM: {str(e)}")
+    logging.error(f"Error initializing Groq LLM: {str(e)}")
     st.stop()
+
+# HuggingFace embeddings — runs locally, no API key needed
+@st.cache_resource(show_spinner="Loading embedding model...")
+def load_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
+document_embedder = load_embeddings()
 
 # Load or create vector store
 vector_store_path = "vectorstore.pkl"
@@ -81,14 +95,14 @@ if not vectorstore:
 with st.sidebar:
     st.subheader("Manage Documents")
     uploaded_files = st.file_uploader("Upload PDF or TXT files", type=["pdf", "txt"], accept_multiple_files=True)
-    
+
     if uploaded_files:
         for uploaded_file in uploaded_files:
             try:
                 file_path = os.path.join(DOCS_DIR, uploaded_file.name)
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-                
+
                 if uploaded_file.name.endswith(".pdf"):
                     pdf_document = fitz.open(file_path)
                     text = "".join([page.get_text("text") for page in pdf_document if page.get_text("text").strip()])
@@ -110,7 +124,7 @@ with st.sidebar:
                 st.error(f"Failed to process {uploaded_file.name}: {str(e)}")
                 logging.error(f"Error processing {uploaded_file.name}: {str(e)}")
 
-        # Rebuild vector store
+        # Rebuild vector store after upload
         if os.path.exists(vector_store_path):
             os.remove(vector_store_path)
         raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt", loader_cls=TextLoader).load()
@@ -201,12 +215,12 @@ if vectorstore:
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-        
+
         try:
             # Retrieve context
             docs = vectorstore.similarity_search(user_input, k=4)
             context = "\n".join([doc.page_content for doc in docs])
-            
+
             # Check context relevance
             if not any(word.lower() in context.lower() for word in user_input.lower().split()):
                 response = "No relevant information found in the documents. Please ask a question related to the uploaded documents."
@@ -220,11 +234,11 @@ if vectorstore:
                     )).content
                     if not response.strip() or "no relevant information" in response.lower():
                         response = "No relevant information found in the documents. Please ask a question related to the uploaded documents."
-            
+
             st.session_state.messages.append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
                 st.markdown(response)
-            
+
             # Debug context
             with st.expander("Debug: Retrieved Context"):
                 for i, doc in enumerate(docs):
