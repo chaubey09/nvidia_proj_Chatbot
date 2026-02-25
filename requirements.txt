@@ -8,3 +8,4 @@ pillow
 PyMuPDF
 tqdm
 unstructured
+langchain-text-splitters
