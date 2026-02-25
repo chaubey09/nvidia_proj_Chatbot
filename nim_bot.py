@@ -1,6 +1,6 @@
 import streamlit as st
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
@@ -239,3 +239,4 @@ else:
 if st.button("Clear Chat"):
     st.session_state.messages = []
     st.success("Chat cleared.")
+
