@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 import fitz  # PyMuPDF for PDF parsing
@@ -60,7 +60,7 @@ if os.path.exists(vector_store_path):
         os.remove(vector_store_path)
 
 if not vectorstore:
-    raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
+    raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt", loader_cls=TextLoader).load()
     if raw_documents:
         try:
             with st.spinner("Processing documents..."):
@@ -113,7 +113,7 @@ with st.sidebar:
         # Rebuild vector store
         if os.path.exists(vector_store_path):
             os.remove(vector_store_path)
-        raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
+        raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt", loader_cls=TextLoader).load()
         if raw_documents:
             try:
                 st.sidebar.info(f"Processing files: {[os.path.basename(doc.metadata['source']) for doc in raw_documents]}")
@@ -139,7 +139,7 @@ with st.sidebar:
                     os.remove(txt_path)
                 if os.path.exists(vector_store_path):
                     os.remove(vector_store_path)
-                raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt").load()
+                raw_documents = DirectoryLoader(TEXT_DIR, glob="*.txt", loader_cls=TextLoader).load()
                 if raw_documents:
                     st.sidebar.info(f"Processing files: {[os.path.basename(doc.metadata['source']) for doc in raw_documents]}")
                     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
@@ -239,4 +239,3 @@ else:
 if st.button("Clear Chat"):
     st.session_state.messages = []
     st.success("Chat cleared.")
-
