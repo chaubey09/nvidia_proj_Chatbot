@@ -40,7 +40,7 @@ def clean_pdf_text(text):
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
     llm = ChatGroq(
-        model="llama3-8b-8192",
+        model="llama-3.1-8b-instant",
         api_key=groq_api_key,
         max_tokens=300,
         temperature=0.2
@@ -253,3 +253,4 @@ else:
 if st.button("Clear Chat"):
     st.session_state.messages = []
     st.success("Chat cleared.")
+
