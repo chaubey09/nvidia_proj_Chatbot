@@ -54,7 +54,8 @@ except Exception as e:
 @st.cache_resource(show_spinner="Loading embedding model...")
 def load_embeddings():
     return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        encode_kwargs={'normalize_embeddings': True}
     )
 
 document_embedder = load_embeddings()
